@@ -12,11 +12,16 @@
 
 #define BUF_SIZE 255
 
+size_t max(size_t a, size_t b) {
+    return a > b ? a : b;
+}
+
 void ls(const char* name) {
     DIR *pDIR;
     char** dirs = NULL;
     int currentDirIndex = 0;
     struct dirent *pDirEnt;
+    size_t nlinksLen = 0, userLength = 0, groupLength = 0, sizeLength = 0, dateLength = 0;
     pDIR = opendir(name);
 
     if(pDIR == NULL) {
@@ -25,6 +30,33 @@ void ls(const char* name) {
         exit(-1);
     }
 
+    pDirEnt = readdir(pDIR);
+    while(pDirEnt != NULL) {
+        struct stat st;
+        if (pDirEnt->d_name[0] == '.') {
+            pDirEnt = readdir(pDIR);
+        }
+        else {
+            char filename[BUF_SIZE];
+            strcpy(filename, name);
+            strcat(filename, "/");
+            strcat(filename, pDirEnt->d_name);
+            stat(filename, &st);
+            char buf[BUF_SIZE];
+            sprintf(buf, "%ld", st.st_size);
+            sizeLength = max(sizeLength, strlen(buf));
+            sprintf(buf, "%lu", st.st_nlink);
+            nlinksLen = max(nlinksLen, strlen(buf));
+            char*t = ctime(&st.st_mtime);
+            dateLength = max(dateLength, strlen(strtok(t, "\n")));
+            struct passwd* user = getpwuid(st.st_uid);
+            struct group* gr = getgrgid(st.st_gid);
+            userLength = max(userLength, strlen(gr->gr_name));
+            groupLength = max(groupLength, strlen(gr->gr_name));
+        }
+        pDirEnt = readdir(pDIR);
+    }
+    rewinddir(pDIR);
     pDirEnt = readdir(pDIR);
     while(pDirEnt != NULL){
         struct stat st;
@@ -39,7 +71,7 @@ void ls(const char* name) {
             stat(filename, &st);
             long int size = st.st_size;
             struct passwd *user = getpwuid(st.st_uid);
-            struct group *group = getgrgid(st.st_gid);
+            struct group *gr = getgrgid(st.st_gid);
             unsigned long int nlinks = st.st_nlink;
             long int date = st.st_mtime;
             char *t = ctime(&date);
@@ -79,8 +111,24 @@ void ls(const char* name) {
                     type = '-';
                     break;
             }
-            printf("%c%s %lu %s %s %ld %s %s\n", type, mod, nlinks, user->pw_name, group->gr_name, size,
-                   strtok(t, "\n"), pDirEnt->d_name);
+            char nlinksSpace[BUF_SIZE], userSpace[BUF_SIZE], groupSpace[BUF_SIZE], sizeSpace[BUF_SIZE], dateSpace[BUF_SIZE];
+            sprintf(nlinksSpace, "%lu", nlinks);
+            for (size_t i = strlen(nlinksSpace); i < nlinksLen; i++)
+                strcat(nlinksSpace, " ");
+            sprintf(userSpace, "%s", user->pw_name);
+            for (size_t i = strlen(userSpace); i < userLength; i++)
+                strcat(userSpace, " ");
+            sprintf(groupSpace, "%s", gr->gr_name);
+            for (size_t i = strlen(groupSpace); i < groupLength; i++)
+                strcat(groupSpace, " ");
+            sprintf(sizeSpace, "%ld", size);
+            for (size_t i = strlen(sizeSpace); i < sizeLength; i++)
+                strcat(sizeSpace, " ");
+            sprintf(dateSpace, "%s", strtok(t, "\n"));
+            for (size_t i = strlen(dateSpace); i < dateLength; i++)
+                strcat(dateSpace, " ");
+            printf("%c%s %s %s %s %s %s %s\n", type, mod, nlinksSpace, userSpace, groupSpace, sizeSpace,
+                   dateSpace, pDirEnt->d_name);
             //		printf("%s %i\n", pDirEnt->d_name, st.st_size);
             pDirEnt = readdir(pDIR);
             free(mod);
